@@ -1,0 +1,8 @@
+ccxt
+pandas
+numpy
+TA-Lib
+backtrader
+websocket-client
+pyyaml
+python-dotenv

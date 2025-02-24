@@ -1,0 +1,12 @@
+{
+    
+    "terminal.integrated.env.windows": {
+    "PYTHONPATH": "c:/TradingBot"
+},
+
+    "python.analysis.extraPaths": [
+    "./venv/Lib/site-packages"
+]
+
+
+}
