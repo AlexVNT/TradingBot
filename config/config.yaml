@@ -1,11 +1,26 @@
+strategy:
+  rsi_period: 5                 # Bestes Ergebnis: 5 statt 10
+  rsi_overbought: 60            # Bestes Ergebnis: 60 statt 65
+  rsi_oversold: 36              # Bestes Ergebnis: 36 statt 35
+  confirmation_bars: 1          # Bestes Ergebnis: 1
+  atr_period: 14                # Bleibt unverändert
+  ema_period: 50                # Bleibt unverändert
+  volume_filter: true           # Bleibt unverändert
+  volume_threshold: 1000        # Bleibt unverändert
+  extended_debug: true          # Bleibt unverändert
+
+risk_management:
+  risk_pct: 0.017               # Bestes Ergebnis: ca. 0.017 (1,7% Risiko)
+  k_atr: 1.98                   # Bestes Ergebnis: ca. 1.98
+  m_atr: 2.73                   # Bestes Ergebnis: ca. 2.73
+  atr_period: 14                # Bleibt unverändert
+  cooldown_bars: 4              # Bestes Ergebnis: 4 (statt 2)
+  short_tp_multiplier: 1.98      # Bestes Ergebnis: ca. 1.98
+
 trading:
   symbol: "BTC/USDT"
-  timeframe: "15m"  # oder "30m", wenn du kurzfristigere Charts nutzen möchtest
-
-strategy:
-  rsi_period: 7
-  rsi_overbought: 75
-  rsi_oversold: 25
+  timeframe: "1h"
+  higher_timeframe: "1d"
 
 binance:
   api_key: ed7f77b2127781dc090c9d2c04e73740eb11f9e3ebb257088003e607b325037d
