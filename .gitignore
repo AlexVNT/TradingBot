@@ -1,3 +1,31 @@
-# API-Schlüssel, .env Dateien usw.
+# 🔐 Verstecke API-Schlüssel & Umgebungsvariablen
 .env
-config/config.yaml
+.env.local
+# config/config.yaml  # Falls du sensible Daten in der Config hast
+
+# 📂 Python-Virtual-Environment
+venv/
+.venv/
+
+# 🚀 Bytecode & Caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# 📊 Jupyter Notebook Caches (falls genutzt)
+.ipynb_checkpoints/
+
+# 🔧 IDE-spezifische Dateien
+.vscode/
+.idea/
+*.swp  # Vim/Neovim Swap-Dateien
+
+# 🐍 Pip/Python-Abhängigkeiten (falls nicht nötig)
+Pipfile
+Pipfile.lock
+poetry.lock
+
+# 🔧 Docker & Deployment (falls genutzt)
+docker-compose.override.yml
