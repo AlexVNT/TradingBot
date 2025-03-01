@@ -27,9 +27,13 @@ def execute_order(connector, symbol, signal, entry_price: float, stop_loss_price
         api_key = connector.api_key
         secret_key = connector.secret_key
 
+        # Hebel aus Config berücksichtigen (hier als Beispiel 10; idealerweise aus config lesen)
+        leverage = 10
+
         # ✅ Berechne Positionsgröße basierend auf Risiko-Management
         risk_pct = 0.01  # Beispielwert; kann aus Config kommen
-        raw_position_size = calculate_position_size(account_balance, risk_pct, entry_price, stop_loss_price)
+        # Ursprüngliche Berechnung multipliziert jetzt mit dem Hebel
+        raw_position_size = calculate_position_size(account_balance, risk_pct, entry_price, stop_loss_price) * leverage
         allowed_precision = 3  # Binance Futures benötigt oft 3 Dezimalstellen für BTCUSDT
         position_size = round(raw_position_size, allowed_precision)
 
@@ -57,7 +61,7 @@ def execute_order(connector, symbol, signal, entry_price: float, stop_loss_price
         if response_order.status_code != 200:
             logger.error(f"❌ Fehler bei Marktorder-Ausführung: {order_data}")
             return None
-        
+
         order_id = order_data.get("orderId")
         logger.info(f"✅ Marktorder erfolgreich platziert: {order_data}")
 

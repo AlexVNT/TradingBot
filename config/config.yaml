@@ -6,7 +6,11 @@ strategy:
   atr_period: 14                # Bleibt unverändert
   ema_period: 50                # Bleibt unverändert
   volume_filter: true           # Bleibt unverändert
-  volume_threshold: 1000        # Bleibt unverändert
+  # Individuelle Volume Thresholds:
+  volume_thresholds:
+    BTCUSDT: 1000
+    ETHUSDT: 500
+    BNBUSDT: 300
   extended_debug: true          # Bleibt unverändert
 
 risk_management:
@@ -18,9 +22,12 @@ risk_management:
   short_tp_multiplier: 1.98      # Bestes Ergebnis: ca. 1.98
 
 trading:
-  symbol: "BTCUSDT"
+  symbols:
+    - "BTCUSDT"
+    - "ETHUSDT"
+    - "BNBUSDT"
   timeframe: "1h"
   higher_timeframe: "1d"
   use_testnet: true  # Testnet aktivieren (false = Live-Modus)
-  trade_pair: "BTC/USDT"  # Standard-Handelspaar
+  trade_pair: "BTCUSDT"  # Standard-Handelspaar
   leverage: 10  # Hebel
