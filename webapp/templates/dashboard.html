@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{% block content %}
+  <h1>Dashboard</h1>
+  <div class="row">
+    <div class="col-md-6">
+      <h3>Performance Metriken</h3>
+      <ul class="list-group">
+        {% for key, value in performance.items() %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            {{ key }}
+            <span class="badge bg-primary rounded-pill">{{ value }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="col-md-6">
+      <h3>Backtest Chart</h3>
+      <canvas id="chartCanvas"></canvas>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js über CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  // Direktes Einfügen des JSON-Objekts, das durch den tojson-Filter erzeugt wird.
+  const chartData = {{ chart_data|tojson }};
+  console.log("chartData:", chartData);
+  
+  const ctx = document.getElementById('chartCanvas').getContext('2d');
+  
+  const myChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+          labels: chartData.labels,
+          datasets: [{
+              label: 'Backtest Ergebnisse',
+              data: chartData.values,
+              borderColor: 'rgba(75, 192, 192, 1)',
+              tension: 0.1
+          }]
+      },
+      options: {
+          responsive: true,
+          scales: {
+              y: { beginAtZero: true }
+          }
+      }
+  });
+</script>
+{% endblock %}
+

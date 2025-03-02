@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+
+{% extends "layout.html" %}
+{% block content %}
+  <h1>Log-Ausgaben</h1>
+  <div class="mb-3">
+    <!-- Die Log-Datei wird in einem scrollbaren Bereich angezeigt -->
+    <pre style="background-color: #f8f9fa; padding: 15px; border: 1px solid #dee2e6; max-height: 500px; overflow-y: scroll;">{{ logs }}</pre>
+  </div>
+{% endblock %}

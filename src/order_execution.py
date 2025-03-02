@@ -6,7 +6,7 @@ import requests
 from risk_management import calculate_position_size
 from utils import logger
 
-def execute_order(connector, symbol, signal, entry_price: float, stop_loss_price: float, take_profit_price: float):
+def execute_order(connector, symbol, signal, entry_price: float, stop_loss_price: float, take_profit_price: float, leverage: int = 10):
     """
     Führt eine Marktorder mit Stop Loss (SL) und Take Profit (TP) aus.
 

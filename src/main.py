@@ -53,7 +53,8 @@ def main():
 
     while time.time() < end_time:
         try:
-            bot.start()
+            bot.start_all()
+
 
             # 📌 Hole Marktdaten & Position
             df = bot.fetch_data()

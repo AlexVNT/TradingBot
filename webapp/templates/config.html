@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+
+{% extends "layout.html" %}
+{% block content %}
+  <h1>Konfiguration</h1>
+  <form method="POST">
+    <div class="mb-3">
+      <label for="configContent" class="form-label">Config Datei Inhalt (YAML):</label>
+      <textarea class="form-control" id="configContent" name="config_content" rows="15">{{ config_content }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Speichern</button>
+  </form>
+{% endblock %}
