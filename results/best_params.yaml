@@ -1,11 +1,11 @@
 params:
-  confirmation_bars: 1
-  cooldown_bars: 4
-  k_atr: 1.9783337444749187
-  m_atr: 2.73487150336544
-  risk_pct: 0.01701368703692733
-  rsi_overbought: 60
-  rsi_oversold: 36
-  rsi_period: 5
-  short_tp_multiplier: 1.9817680865410567
-target: 0.6403454156955407
+  confirmation_bars: 2
+  cooldown_bars: 5
+  k_atr: 2.0979909127171075
+  m_atr: 3.79597545259111
+  risk_pct: 0.007340279606636548
+  rsi_overbought: 65
+  rsi_oversold: 12
+  rsi_period: 18
+  short_tp_multiplier: 1.6011150117432087
+target: -1000.0

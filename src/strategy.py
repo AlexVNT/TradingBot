@@ -58,17 +58,33 @@ class CompositeStrategy:
         if initial_signal == "SELL" and daily_trend != "BEARISH":
             daily_condition = False
 
-        # Volumenfilter anwenden
-        if self.volume_filter:
-            vol_col = 'volume' if 'volume' in df_1h.columns else 'volume_btc'
-            # Hole den individuellen Threshold, falls vorhanden, sonst Standardwert
-            threshold = self.volume_thresholds.get(symbol, self.volume_threshold) if symbol is not None else self.volume_threshold
-            if threshold is None:
-                threshold = 1000  # Fallback-Wert
-            volume_ok = df_1h[vol_col].iloc[-1] > threshold
-        else:
-            threshold = None
-            volume_ok = True
+       # Optional: Volumenfilter
+        volume_ok = True
+        vol_col = None  # Standardmäßig auf None setzen
+        if self.volume_filter and self.volume_threshold is not None:
+            if 'volume' in df_1h.columns:
+                vol_col = 'volume'
+            elif 'volume_btc' in df_1h.columns:
+                vol_col = 'volume_btc'
+            elif 'tick_volume' in df_1h.columns:
+                vol_col = 'tick_volume'
+            elif 'real_volume' in df_1h.columns:
+                vol_col = 'real_volume'
+            else:
+                print("[DEBUG] Keine Volumen-Spalte gefunden. Volumenfilter wird deaktiviert.")
+                volume_ok = True  # Filter nicht anwenden, da keine Volumen-Daten vorhanden sind.
+            if vol_col is not None:
+                volume_ok = df_1h[vol_col].iloc[-1] > self.volume_threshold
+
+        if self.extended_debug:
+            current_time = df_1h.index[-1]
+            current_close = df_1h['close'].iloc[-1]
+            print(f"[DEBUG] Zeit: {current_time}, RSI: {list(recent_rsi.round(2))}, Close: {current_close:.2f}")
+            print(f"[DEBUG] Tagestrend (EMA {self.ema_period}): {daily_trend}")
+            if self.volume_filter and vol_col is not None:
+                print(f"[DEBUG] Volume ({vol_col}): {df_1h[vol_col].iloc[-1]:.2f} (Threshold: {self.volume_threshold}) -> {volume_ok}")
+
+
 
         # Prüfe, ob bereits eine Position in derselben Richtung existiert
         duplicate_condition = True

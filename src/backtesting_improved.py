@@ -32,11 +32,11 @@ def load_daily_data(daily_file: str) -> pd.DataFrame:
     df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
     return df
 
-def run_backtest(df: pd.DataFrame, strategy, config: dict, daily_df: pd.DataFrame, account_balance: float = 100000) -> (pd.DataFrame, list):
+def run_backtest(df: pd.DataFrame, strategy, config: dict, daily_df: pd.DataFrame, account_balance: float = 100000, symbol: str = None) -> (pd.DataFrame, list):
     """
     Simuliert den Backtest anhand der Hourly-Daten und nutzt den Daily-DataFrame
-    als übergeordneten Trendfilter. Positionsmanagement erfolgt via dynamischer ATR-basierter
-    Stop-Loss / Take-Profit-Mechanismen.
+    als übergeordneten Trendfilter. Falls ein Symbol übergeben wird, wird dieses in
+    einer zusätzlichen Spalte abgelegt.
     """
     risk_pct = config['risk_management'].get('risk_pct', 0.01)
     k_atr = config['risk_management'].get('k_atr', 1.5)
@@ -45,6 +45,10 @@ def run_backtest(df: pd.DataFrame, strategy, config: dict, daily_df: pd.DataFram
     cooldown_bars = config['risk_management'].get('cooldown_bars', 2)
 
     df = df.copy()
+    # Falls ein Symbol übergeben wurde, füge eine Spalte hinzu:
+    if symbol is not None:
+        df['symbol'] = symbol
+
     if 'atr' not in df.columns:
         df['atr'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=atr_period)
     
@@ -60,7 +64,7 @@ def run_backtest(df: pd.DataFrame, strategy, config: dict, daily_df: pd.DataFram
     short_take_profit = None
     cooldown = 0
 
-    # Erstelle Signale – die Strategie erhält den Hourly-DataFrame und den Daily-DataFrame (als Trendfilter)
+    # Erstelle Signale – übergebe hier die Datenframes an die Strategie
     df['signal'] = df.apply(lambda row: strategy.generate_signal(df.loc[:row.name], daily_df.loc[:row.name.floor('D')]), axis=1)
 
     for i in range(len(df)):
@@ -76,10 +80,7 @@ def run_backtest(df: pd.DataFrame, strategy, config: dict, daily_df: pd.DataFram
         # Positionsmanagement für Long-Positionen
         if position == 1:
             new_trailing_stop = price - k_atr * current_atr
-            if trailing_stop is None:
-                trailing_stop = new_trailing_stop
-            else:
-                trailing_stop = max(trailing_stop, new_trailing_stop)
+            trailing_stop = new_trailing_stop if trailing_stop is None else max(trailing_stop, new_trailing_stop)
             if price < trailing_stop:
                 profit = price - entry_price
                 trades.append((current_time, "TRAILING-STOP-LONG", price, profit, pos_size, trailing_stop))
@@ -205,14 +206,14 @@ def visualize_backtest(df: pd.DataFrame, trades: list, title="Backtest: Beste Pa
     plt.show()
 
 def main():
-    # Dateipfade zu Hourly- und Daily-Daten
+    # Beispielhafte Dateipfade (hier werden CSVs als Fallback genutzt)
     hourly_file = "data/historical/BTC_1h_2024.csv"
     daily_file = "data/historical/BTC_1d_2024.csv"
     
     df_hourly = load_data(hourly_file)
     daily_df = load_daily_data(daily_file)
     
-    # Konfiguration – hier kannst du deine Parameter aus dem Tuning-Ergebnis übernehmen
+    # Beispielhafte Config, die Parameter aus dem Tuning übernimmt
     config = {
         'strategy': {
             'rsi_period': 10,
@@ -236,7 +237,8 @@ def main():
     }
     
     strategy = CompositeStrategy(config)
-    df_sim, trades = run_backtest(df_hourly, strategy, config, daily_df=daily_df, account_balance=100000)
+    # Hier wird auch das Symbol explizit übergeben (Beispiel: "BTCUSDT")
+    df_sim, trades = run_backtest(df_hourly, strategy, config, daily_df=df_daily, account_balance=100000, symbol="BTCUSDT")
     perf = calculate_performance(df_sim, trades)
     logger.info(f"Performance: {perf}")
     visualize_backtest(df_sim, trades, title="Backtest: Beste Parameter")

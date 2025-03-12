@@ -1,33 +1,42 @@
+platforms:
+  binance: false
+  metatrader: true
+
 strategy:
-  rsi_period: 5                 # Bestes Ergebnis: 5 statt 10
-  rsi_overbought: 60            # Bestes Ergebnis: 60 statt 65
-  rsi_oversold: 36              # Bestes Ergebnis: 36 statt 35
-  confirmation_bars: 1          # Bestes Ergebnis: 1
-  atr_period: 14                # Bleibt unverändert
-  ema_period: 50                # Bleibt unverändert
-  volume_filter: true           # Bleibt unverändert
-  # Individuelle Volume Thresholds:
+  rsi_period: 5
+  rsi_overbought: 60
+  rsi_oversold: 36
+  confirmation_bars: 1
+  atr_period: 14
+  ema_period: 50
+  volume_filter: true
   volume_thresholds:
     BTCUSDT: 1000
     ETHUSDT: 500
     BNBUSDT: 300
-  extended_debug: true          # Bleibt unverändert
+  extended_debug: true
 
 risk_management:
-  risk_pct: 0.017               # Bestes Ergebnis: ca. 0.017 (1,7% Risiko)
-  k_atr: 1.98                   # Bestes Ergebnis: ca. 1.98
-  m_atr: 2.73                   # Bestes Ergebnis: ca. 2.73
-  atr_period: 14                # Bleibt unverändert
-  cooldown_bars: 4              # Bestes Ergebnis: 4 (statt 2)
-  short_tp_multiplier: 1.98      # Bestes Ergebnis: ca. 1.98
+  risk_pct: 0.017
+  k_atr: 1.98
+  m_atr: 2.73
+  atr_period: 14
+  cooldown_bars: 4
+  short_tp_multiplier: 1.98
 
 trading:
-  symbols:
-    - "BTCUSDT"
-    - "ETHUSDT"
-    - "BNBUSDT"
-  timeframe: "1h"
-  higher_timeframe: "1d"
-  use_testnet: true  # Testnet aktivieren (false = Live-Modus)
-  trade_pair: "BTCUSDT"  # Standard-Handelspaar
-  leverage: 10  # Hebel
+  binance:
+    symbols:
+      - "BTCUSDT"
+      - "ETHUSDT"
+      - "BNBUSDT"
+    timeframe: "1h"
+    higher_timeframe: "1d"
+    use_testnet: true
+    trade_pair: "BTCUSDT"
+    leverage: 10
+  metatrader:
+    symbol: "EURUSD"
+    timeframe: "H1"
+    higher_timeframe: "D1"
+    leverage: 1
