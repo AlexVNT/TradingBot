@@ -3,19 +3,24 @@ platforms:
   metatrader: true
 
 strategy:
-  rsi_period: 5
-  rsi_overbought: 75
-  rsi_oversold: 25
+  rsi_period: 2
+  rsi_overbought: 87
+  rsi_oversold: 38
   atr_period: 14
-  lookback: 5  # Für Gradienten-Trendbestimmung
+  lookback: 3
   volume_filter: false
   volume_threshold: null
+  volume_lookback: 10
+  volume_weight: 0.5
+  gap_threshold: 0.005
+  gap_block_hours: 4
   extended_debug: true
-  atr_tp_multiplier: 5.0
+  atr_tp_multiplier: 6.0
   atr_sl_multiplier: 1.5
 
 risk_management:
-  risk_pct: 0.017
+  initial_balance: 16000  # Budget des Demo-Accounts
+  risk_pct: 0.01  # 1 % Risiko pro Trade
   k_atr: 1.98
   m_atr: 2.73
   atr_period: 14
@@ -33,7 +38,7 @@ trading:
     higher_timeframe: "1d"
     use_testnet: true
     trade_pair: "BTCUSDT"
-    leverage: 10
+    leverage: 1
     volume_column: "volume"
   metatrader:
     symbol: "EURUSD"

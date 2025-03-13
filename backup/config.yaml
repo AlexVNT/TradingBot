@@ -1,26 +1,47 @@
+platforms:
+  binance: false
+  metatrader: true
+
 strategy:
-  rsi_period: 10
-  rsi_oversold: 35
-  rsi_overbought: 65
-  confirmation_bars: 3
+  rsi_period: 2
+  rsi_overbought: 87
+  rsi_oversold: 38
   atr_period: 14
+  lookback: 3
+  volume_filter: false
+  volume_threshold: null
+  volume_lookback: 10
+  volume_weight: 0.5
+  gap_threshold: 0.005
+  gap_block_hours: 4
   extended_debug: true
-  rsi_delta: 5
-  short_delta: 10
-  debug_frequency: 50
+  atr_tp_multiplier: 6.0
+  atr_sl_multiplier: 1.5
 
 risk_management:
-  risk_pct: 0.2
-  k_atr: 1.5
-  m_atr: 3.0
+  risk_pct: 0.017
+  k_atr: 1.98
+  m_atr: 2.73
   atr_period: 14
-  cooldown_bars: 2
+  cooldown_bars: 4
+  short_tp_multiplier: 1.98
 
 trading:
-  symbol: "BTC/USDT"
-  timeframe: "1h"
-  higher_timeframe: "1d"
-
-binance:
-  api_key: ed7f77b2127781dc090c9d2c04e73740eb11f9e3ebb257088003e607b325037d
-  secret: 9c18a13451aa73a110154af79b917122b30350d9f608933e07fd1f6bcc70252b
+  max_open_positions: 3
+  binance:
+    symbols:
+      - "BTCUSDT"
+      - "ETHUSDT"
+      - "BNBUSDT"
+    timeframe: "1h"
+    higher_timeframe: "1d"
+    use_testnet: true
+    trade_pair: "BTCUSDT"
+    leverage: 10
+    volume_column: "volume"
+  metatrader:
+    symbol: "EURUSD"
+    timeframe: "H1"
+    higher_timeframe: "H4"
+    leverage: 1
+    volume_column: "tick_volume"

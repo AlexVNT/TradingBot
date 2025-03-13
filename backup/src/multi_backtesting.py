@@ -34,7 +34,7 @@ def load_data(platform, symbol, config):
     elif platform == "metatrader":
         trade_conf = config['trading']['metatrader']
         timeframe = trade_conf["timeframe"]
-        higher_tf = trade_conf["higher_timeframe"]
+        higher_tf = trade_conf["higher_timeframe"]  # H4 aus Config
         tf_mapping = {
             "M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15,
             "M30": mt5.TIMEFRAME_M30, "H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4,
@@ -54,7 +54,7 @@ def load_data(platform, symbol, config):
         if len(df_higher) < 50 or df_higher['close'].isnull().any():
             logger.warning(f"Unzureichende oder ungültige H4-Daten für {symbol}: {len(df_higher)} Bars, NaN-Werte: {df_higher['close'].isnull().sum()}")
             return None, None
-        logger.debug(f"H4-Daten: {df_higher.head()}")
+        logger.debug(f"H4-Daten: {df_higher.head()}")  # Debug-Ausgabe für H4-Daten
 
         df_hourly = df_hourly.rename(columns={"tick_volume": "volume"})
         df_higher = df_higher.rename(columns={"tick_volume": "volume"})
@@ -81,11 +81,10 @@ def main():
         logger.error("Keine Plattform aktiviert in config.yaml!")
         return
     
-    # Erweiterte Liste von Symbolen für MetaTrader
-    if platform == "metatrader":
-        symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
-    else:
+    if platform == "binance":
         symbols = config['trading']['binance'].get("symbols", [config['trading'].get("trade_pair", "BTCUSDT")])
+    else:
+        symbols = [config['trading']['metatrader'].get("symbol", "EURUSD")]
 
     summaries = []
     

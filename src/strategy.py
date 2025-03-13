@@ -4,6 +4,7 @@ import yaml
 import pandas as pd
 import numpy as np
 from utils import logger
+from datetime import timedelta
 
 CONFIG_PATH = "config/config.yaml"
 
@@ -14,7 +15,7 @@ def load_config():
 config = load_config()
 
 def get_higher_trend_with_gradient(df_higher: pd.DataFrame, lookback: int = 5) -> str:
-    """Bestimmt den Trend basierend auf dem Gradienten der letzten 5 Kerzen."""
+    """Bestimmt den Trend basierend auf dem Gradienten der letzten Kerzen."""
     if df_higher.empty or len(df_higher) < lookback + 1:
         logger.warning("Nicht genug H4-Daten für Trendbestimmung")
         return "UNKNOWN"
@@ -24,15 +25,32 @@ def get_higher_trend_with_gradient(df_higher: pd.DataFrame, lookback: int = 5) -
         return "UNKNOWN"
     price_changes = np.diff(closes)
     trend_score = np.mean(price_changes)
-    if trend_score > 0.0001:  # Positive Änderung (z. B. 0.01 %)
+    if trend_score > 0.00005:
         logger.debug(f"BULLISH: Closes {list(closes)}, Trend Score {trend_score:.5f}")
         return "BULLISH"
-    elif trend_score < -0.0001:  # Negative Änderung (z. B. 0.01 %)
+    elif trend_score < -0.00005:
         logger.debug(f"BEARISH: Closes {list(closes)}, Trend Score {trend_score:.5f}")
         return "BEARISH"
     else:
         logger.debug(f"NEUTRAL: Closes {list(closes)}, Trend Score {trend_score:.5f}")
         return "NEUTRAL"
+
+def detect_friday_close_or_monday_pause(current_time, df_1h, block_hours=4):
+    """Schließt alle Positionen freitags ab 20:00 UTC und blockiert Signale montags für die ersten block_hours Stunden."""
+    # Freitag ab 20:00 UTC: Schließe alle Positionen
+    if current_time.weekday() == 4:  # 4 = Freitag
+        if current_time.hour >= 20:
+            logger.info(f"Freitag {current_time}: Schließe alle Positionen vor dem Wochenende")
+            return "CLOSE_ALL"
+
+    # Montag: Blockiere Signale für die ersten block_hours Stunden
+    if current_time.weekday() == 0:  # 0 = Montag
+        first_monday_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        hours_since_open = (current_time - first_monday_time).total_seconds() / 3600
+        if hours_since_open <= block_hours:
+            logger.debug(f"Montag {current_time}: Signale für {block_hours - hours_since_open:.2f} Stunden blockiert")
+            return "BLOCK"
+    return None
 
 class CompositeStrategy:
     def __init__(self, config):
@@ -42,16 +60,20 @@ class CompositeStrategy:
         self.rsi_overbought = strategy_config.get("rsi_overbought", 75)
         self.rsi_oversold = strategy_config.get("rsi_oversold", 25)
         self.atr_period = strategy_config.get("atr_period", 14)
-        self.lookback = strategy_config.get("lookback", 5)  # Für Trendbestimmung
+        self.lookback = strategy_config.get("lookback", 5)
         self.volume_filter = strategy_config.get("volume_filter", False)
         self.volume_threshold = strategy_config.get("volume_threshold", None)
         self.volume_thresholds = strategy_config.get("volume_thresholds", {})
         self.extended_debug = strategy_config.get("extended_debug", True)
-        self.atr_tp_multiplier = strategy_config.get("atr_tp_multiplier", 5.0)
+        self.atr_tp_multiplier = strategy_config.get("atr_tp_multiplier", 6.0)
         self.atr_sl_multiplier = strategy_config.get("atr_sl_multiplier", 1.5)
+        self.gap_threshold = strategy_config.get("gap_threshold", 0.005)
+        self.gap_block_hours = strategy_config.get("gap_block_hours", 4)
+        self.volume_weight = strategy_config.get("volume_weight", 0.5)
         self.highest_price = None
         self.lowest_price = None
-        self.prev_rsi = None  # Für RSI-Kreuzungslogik
+        self.prev_rsi = None
+        self.prev_volume = None
 
     def generate_signal(self, df_1h: pd.DataFrame, df_higher: pd.DataFrame, current_position: str = "NONE", symbol: str = None, entry_price: float = None) -> str:
         if df_1h.empty or df_higher.empty or len(df_1h) < max(self.rsi_period, self.atr_period) + 1:
@@ -66,17 +88,30 @@ class CompositeStrategy:
         rsi_sell = prev_rsi is not None and prev_rsi >= self.rsi_overbought and current_rsi < self.rsi_overbought
         initial_signal = "BUY" if rsi_buy else "SELL" if rsi_sell else "HOLD"
 
-        # Trendbestimmung nur für Ausstiege verwenden
+        # Trendbestimmung für Signale und Ausstiege
         higher_trend = get_higher_trend_with_gradient(df_higher, lookback=self.lookback)
 
-        volume_ok = True
-        vol_col = self.config.get("volume_column", "volume")
-        if vol_col not in df_1h.columns:
-            logger.error(f"Volumenspalte '{vol_col}' nicht in Daten gefunden. Verfügbare Spalten: {df_1h.columns}")
+        # Trendbedingung für Signale
+        trend_condition = True
+        if higher_trend == "NEUTRAL":
+            trend_condition = False
+        elif initial_signal == "BUY" and higher_trend != "BULLISH":
+            trend_condition = False
+        elif initial_signal == "SELL" and higher_trend != "BEARISH":
+            trend_condition = False
+
+        # Freitag/Montag-Logik
+        current_time = df_1h.index[-1]
+        weekend_action = detect_friday_close_or_monday_pause(current_time, df_1h, self.gap_block_hours)
+        if weekend_action == "CLOSE_ALL":
+            if current_position == "LONG":
+                return "CLOSE_LONG"
+            elif current_position == "SHORT":
+                return "CLOSE_SHORT"
             return "HOLD"
-        vol_value = df_1h[vol_col].iloc[-1]
-        if self.volume_filter and self.volume_threshold is not None:
-            volume_ok = vol_value >= self.volume_threshold
+        elif weekend_action == "BLOCK":
+            initial_signal = "HOLD"
+            logger.info("Signale blockiert wegen Montag-Pause")
 
         if current_position == "LONG" and entry_price is not None:
             atr = talib.ATR(df_1h['high'], df_1h['low'], df_1h['close'], timeperiod=self.atr_period).iloc[-1]
@@ -123,11 +158,10 @@ class CompositeStrategy:
             print(f"[DEBUG] Requested symbol: {symbol}")
             print(f"[DEBUG] RSI values: {current_rsi:.2f}")
             print(f"[DEBUG] Initial signal based on RSI: {initial_signal}")
-            if self.volume_filter:
-                print(f"[DEBUG] Volume: {vol_value:.2f} | Threshold: {self.volume_threshold} | Volume condition: {volume_ok}")
+            print(f"[DEBUG] Trend condition: {trend_condition}")
             print(f"[DEBUG] Current position: {current_position} | Duplicate condition: {duplicate_condition}")
 
-        final_signal = initial_signal if (volume_ok and duplicate_condition) else "HOLD"
+        final_signal = initial_signal if (trend_condition and duplicate_condition) else "HOLD"
 
         if self.extended_debug:
             print(f"[DEBUG] Final signal: {final_signal}")

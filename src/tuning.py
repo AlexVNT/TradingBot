@@ -36,7 +36,7 @@ def evaluate_strategy(rsi_period, rsi_overbought, rsi_oversold, atr_tp, atr_sl, 
     rsi_oversold = max(10, min(40, rsi_oversold))
     atr_tp = max(2.0, min(8.0, atr_tp))
     atr_sl = max(0.5, min(3.5, atr_sl))
-    lookback = max(3, min(10, lookback))  # Lookback zwischen 3 und 10
+    lookback = max(3, min(10, lookback))
 
     # Temporäre Config anpassen
     temp_config = config.copy()
@@ -77,7 +77,7 @@ def tune_strategy():
         'rsi_oversold': (10, 40),
         'atr_tp': (2.0, 8.0),
         'atr_sl': (0.5, 3.5),
-        'lookback': (3, 10)  # Neuer Parameter für Gradienten-Trendbestimmung
+        'lookback': (3, 10)
     }
 
     optimizer = BayesianOptimization(
@@ -103,6 +103,12 @@ def tune_strategy():
     best_params['lookback'] = int(round(best_params['lookback']))
     best_value = optimizer.max['target']
     logger.info(f"Beste Parameter: {best_params} mit Score: {best_value:.5f}")
+
+    # Speichere die besten Parameter in einer separaten Datei
+    os.makedirs("results", exist_ok=True)
+    with open("results/best_parameters.yaml", "w") as f:
+        yaml.dump(best_params, f)
+    logger.info("Beste Parameter gespeichert in 'results/best_parameters.yaml'")
 
     results = pd.DataFrame(optimizer.res)
     os.makedirs("results", exist_ok=True)
