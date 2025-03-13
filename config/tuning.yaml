@@ -1,0 +1,31 @@
+tuning:
+  - name: "Default"
+    rsi_period: 5
+    rsi_overbought: 90
+    rsi_oversold: 39
+    atr_tp_multiplier: 3.5
+    atr_sl_multiplier: 1.442
+  - name: "Aggressive RSI"
+    rsi_period: 5
+    rsi_overbought: 80  # Reduziert, um mehr Short-Trades zu ermöglichen
+    rsi_oversold: 30   # Reduziert, um mehr Long-Trades zu ermöglichen
+    atr_tp_multiplier: 3.5
+    atr_sl_multiplier: 1.442
+  - name: "Wider TP/SL"
+    rsi_period: 5
+    rsi_overbought: 90
+    rsi_oversold: 39
+    atr_tp_multiplier: 4.0  # Weiterer TP für größere Trends
+    atr_sl_multiplier: 1.8  # Weiterer SL, um mehr Schwankungen zuzulassen
+  - name: "Faster RSI"
+    rsi_period: 3  # Kürzerer RSI für schnellere Reaktion
+    rsi_overbought: 90
+    rsi_oversold: 39
+    atr_tp_multiplier: 3.5
+    atr_sl_multiplier: 1.442
+  - name: "Conservative RSI"
+    rsi_period: 5
+    rsi_overbought: 95  # Höher, um weniger Short-Trades zu generieren
+    rsi_oversold: 20   # Niedriger, um weniger Long-Trades zu generieren
+    atr_tp_multiplier: 3.5
+    atr_sl_multiplier: 1.442

@@ -4,17 +4,15 @@ platforms:
 
 strategy:
   rsi_period: 5
-  rsi_overbought: 60
-  rsi_oversold: 36
-  confirmation_bars: 1
+  rsi_overbought: 75
+  rsi_oversold: 25
   atr_period: 14
-  ema_period: 50
-  volume_filter: true
-  volume_thresholds:
-    BTCUSDT: 1000
-    ETHUSDT: 500
-    BNBUSDT: 300
+  lookback: 5  # Für Gradienten-Trendbestimmung
+  volume_filter: false
+  volume_threshold: null
   extended_debug: true
+  atr_tp_multiplier: 5.0
+  atr_sl_multiplier: 1.5
 
 risk_management:
   risk_pct: 0.017
@@ -25,6 +23,7 @@ risk_management:
   short_tp_multiplier: 1.98
 
 trading:
+  max_open_positions: 3
   binance:
     symbols:
       - "BTCUSDT"
@@ -35,8 +34,10 @@ trading:
     use_testnet: true
     trade_pair: "BTCUSDT"
     leverage: 10
+    volume_column: "volume"
   metatrader:
     symbol: "EURUSD"
     timeframe: "H1"
-    higher_timeframe: "D1"
+    higher_timeframe: "H4"
     leverage: 1
+    volume_column: "tick_volume"
