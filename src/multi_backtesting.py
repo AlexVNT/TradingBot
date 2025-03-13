@@ -20,6 +20,27 @@ def save_backtest_summary(summaries, filename="results/backtest_summary.csv"):
     except Exception as e:
         logger.error(f"Fehler beim Speichern der Zusammenfassung: {e}")
 
+def save_simplified_log(summaries, filename="results/simplified_log.txt"):
+    """Speichert die Backtest-Ergebnisse in einem vereinfachten Log-Format."""
+    try:
+        os.makedirs("results", exist_ok=True)
+        with open(filename, "w") as f:
+            for summary in summaries:
+                symbol = summary["symbol"]
+                total_profit = summary["total_profit"]
+                profit_factor = summary["profit_factor"]
+                num_trades = summary["num_trades"]
+                win_rate = summary["win_rate"]
+                wins = int(win_rate * num_trades)
+                max_drawdown = summary["max_drawdown"]
+                sharpe = summary["sharpe"]
+                # Schreibe das vereinfachte Format
+                f.write(f"{symbol}:\n")
+                f.write(f"Profit: {total_profit:.5f} | Profitfactor: {profit_factor:.2f} | Wins: {wins} | Trades: {num_trades} | Drawdown: {max_drawdown:.5f} | Sharp: {sharpe:.2f}\n\n")
+        logger.info(f"Vereinfachtes Log in {filename} gespeichert.")
+    except Exception as e:
+        logger.error(f"Fehler beim Speichern des vereinfachten Logs: {e}")
+
 def load_data(platform, symbol, config):
     """Lädt historische Daten für die gegebene Plattform und Symbol."""
     if platform == "binance":
@@ -126,6 +147,7 @@ def main():
     
     if summaries:
         save_backtest_summary(summaries)
+        save_simplified_log(summaries)  # Vereinfachtes Log speichern
     else:
         logger.warning("Keine Backtest-Ergebnisse zum Speichern.")
 
