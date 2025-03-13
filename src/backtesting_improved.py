@@ -1,7 +1,9 @@
 # src/backtesting_improved.py
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import talib
 from utils import logger
 
 def run_backtest(df, strategy, config, df_higher=None, symbol=None):
@@ -24,14 +26,26 @@ def run_backtest(df, strategy, config, df_higher=None, symbol=None):
     balance = initial_balance
     equity = initial_balance
     position = "NONE"
+    prev_position = "NONE"  # Für Debug-Logik
     entry_price = 0
+    units = 0  # Anzahl der gehandelten Lots
     trades = []
     equity_curve = []
+    debug_data = []  # Liste für Debug-Informationen
     
     # Risikomanagement-Parameter aus der config.yaml
-    risk_pct = config["risk_management"].get("risk_pct", 0.02)  # 2 % Risiko pro Trade
-    atr_sl_multiplier = config["strategy"].get("atr_sl_multiplier", 2.0)
+    risk_pct = config["risk_management"].get("risk_pct", 0.01)  # 1 % Risiko pro Trade
+    atr_sl_multiplier = 1.0  # Nur für GBPUSD relevant
+    atr_tp_multiplier = config["strategy"].get("atr_tp_multiplier", 6.0)
+    atr_period = config["risk_management"].get("atr_period", 14)
     leverage = config["trading"]["metatrader"].get("leverage", 1)
+    fixed_sl_pips = 8 if symbol == "EURUSD" else 7 if symbol == "AUDUSD" else 12  # Letzte Feinjustierung für AUDUSD
+    fixed_risk_per_trade = 160  # Feste Risiko pro Trade
+    
+    # Berechne ATR und füge es dem Datenframe hinzu
+    df["atr"] = talib.ATR(df["high"], df["low"], df["close"], timeperiod=atr_period)
+    # Füllen von NaN-Werten mit dem ersten gültigen ATR-Wert
+    df["atr"] = df["atr"].fillna(method="bfill").fillna(df["atr"].mean())
     
     # Initialisiere den simulierten Datenframe
     df_sim = df.copy()
@@ -40,23 +54,47 @@ def run_backtest(df, strategy, config, df_higher=None, symbol=None):
     df_sim["position"] = "NONE"
     
     for i in range(1, len(df_sim)):
-        # Aktuelle und vorherige Zeile
         current_time = df_sim.index[i]
-        prev_time = df_sim.index[i-1]
         current_close = df_sim["close"].iloc[i]
-        prev_close = df_sim["close"].iloc[i-1]
+        atr = df_sim["atr"].iloc[i]
         
         # Aktualisiere Equity für offene Positionen
         if position != "NONE":
+            pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
             if position == "LONG":
-                equity = balance + (current_close - entry_price) * units * leverage
+                price_diff = (current_close - entry_price)
+                pips = price_diff / 0.0001 if symbol != "USDJPY" else price_diff / 0.01
+                equity = balance + (pips * units * pip_value * leverage)
             elif position == "SHORT":
-                equity = balance + (entry_price - current_close) * units * leverage
+                price_diff = (entry_price - current_close)
+                pips = price_diff / 0.0001 if symbol != "USDJPY" else price_diff / 0.01
+                equity = balance + (pips * units * pip_value * leverage)
         else:
             equity = balance
         
         df_sim.at[current_time, "balance"] = balance
         df_sim.at[current_time, "equity"] = equity
+        
+        # Speichere Debug-Daten vor der Änderung der Position
+        if prev_position != position:
+            debug_data.append({
+                "time": current_time,
+                "balance": balance,
+                "equity": equity,
+                "position": position,
+                "entry_price": entry_price if position != "NONE" else 0,
+                "exit_price": current_close if position == "NONE" and prev_position != "NONE" else 0,
+                "units": units if position != "NONE" or prev_position != "NONE" else 0,
+                "atr": atr,
+                "pip_value": pip_value if position != "NONE" or prev_position != "NONE" else 0,
+                "risk_per_unit_in_pips": risk_per_unit_in_pips if position != "NONE" else 0,
+                "highest_win": max([trade["profit"] for trade in trades if trade["profit"] > 0] + [0]) if trades else 0,
+                "highest_loss": min([trade["profit"] for trade in trades if trade["profit"] < 0] + [0]) if trades else 0,
+                "profit": trades[-1]["profit"] if trades and position == "NONE" else 0
+            })
+        
+        # Aktualisiere Position für den nächsten Vergleich
+        prev_position = position
         df_sim.at[current_time, "position"] = position
         equity_curve.append(equity)
         
@@ -71,66 +109,104 @@ def run_backtest(df, strategy, config, df_higher=None, symbol=None):
         
         # Handle Signals
         if signal == "BUY" and position == "NONE":
-            # Berechne Positionsgröße basierend auf Risiko
-            atr = df_sim["atr"].iloc[i] if "atr" in df_sim.columns else 0.001
-            stop_loss = current_close - atr * atr_sl_multiplier
-            risk_per_unit = abs(current_close - stop_loss)
-            risk_per_trade = balance * risk_pct
-            units = risk_per_trade / risk_per_unit if risk_per_unit > 0 else 0
-            units = units * leverage
+            # Fester Stop-Loss für alle Paare
+            if symbol == "USDJPY":
+                stop_loss = current_close - (fixed_sl_pips * 0.01)
+                risk_per_unit = fixed_sl_pips * 0.01
+                risk_per_unit_in_pips = fixed_sl_pips
+            else:
+                stop_loss = current_close - (fixed_sl_pips * 0.0001)
+                risk_per_unit = fixed_sl_pips * 0.0001
+                risk_per_unit_in_pips = fixed_sl_pips
+            
+            risk_per_trade = fixed_risk_per_trade  # Feste Risiko pro Trade
+            pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
+            units = (risk_per_trade / (risk_per_unit_in_pips * pip_value)) if risk_per_unit > 0 and pip_value > 0 else 0
+            units = min(max(units, 0.01), 100.0)
             
             position = "LONG"
             entry_price = current_close
-            balance -= units * current_close * 0.0001  # Transaktionskosten (angenommen 0.01 %)
+            balance -= units * pip_value * 0.0001  # Transaktionskosten (0.01 %)
             df_sim.at[current_time, "position"] = position
-            logger.info(f"{symbol}-Position eröffnet bei {entry_price} um {current_time}")
+            logger.info(f"{symbol}-Position eröffnet bei {entry_price} um {current_time}, Units: {units:.4f}, Pip Value: {pip_value:.4f}, Risk per Unit (Pips): {risk_per_unit_in_pips:.2f}, ATR: {atr:.6f}")
         
         elif signal == "SELL" and position == "NONE":
-            atr = df_sim["atr"].iloc[i] if "atr" in df_sim.columns else 0.001
-            stop_loss = current_close + atr * atr_sl_multiplier
-            risk_per_unit = abs(stop_loss - current_close)
-            risk_per_trade = balance * risk_pct
-            units = risk_per_trade / risk_per_unit if risk_per_unit > 0 else 0
-            units = units * leverage
+            # Fester Stop-Loss für alle Paare
+            if symbol == "USDJPY":
+                stop_loss = current_close + (fixed_sl_pips * 0.01)
+                risk_per_unit = fixed_sl_pips * 0.01
+                risk_per_unit_in_pips = fixed_sl_pips
+            else:
+                stop_loss = current_close + (fixed_sl_pips * 0.0001)
+                risk_per_unit = fixed_sl_pips * 0.0001
+                risk_per_unit_in_pips = fixed_sl_pips
+            
+            risk_per_trade = fixed_risk_per_trade  # Feste Risiko pro Trade
+            pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
+            units = (risk_per_trade / (risk_per_unit_in_pips * pip_value)) if risk_per_unit > 0 and pip_value > 0 else 0
+            units = min(max(units, 0.01), 100.0)
             
             position = "SHORT"
             entry_price = current_close
-            balance -= units * current_close * 0.0001  # Transaktionskosten
+            balance -= units * pip_value * 0.0001  # Transaktionskosten
             df_sim.at[current_time, "position"] = position
-            logger.info(f"{symbol}-Position eröffnet bei {entry_price} um {current_time}")
+            logger.info(f"{symbol}-Position eröffnet bei {entry_price} um {current_time}, Units: {units:.4f}, Pip Value: {pip_value:.4f}, Risk per Unit (Pips): {risk_per_unit_in_pips:.2f}, ATR: {atr:.6f}")
         
         elif (signal == "CLOSE_LONG" and position == "LONG") or (signal == "CLOSE_SHORT" and position == "SHORT"):
             if position == "LONG":
-                profit = (current_close - entry_price) * units * leverage
+                pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
+                price_diff = (current_close - entry_price)
+                pips = price_diff / 0.0001 if symbol != "USDJPY" else price_diff / 0.01
+                profit = pips * units * pip_value * leverage
                 balance += profit
-                balance -= units * current_close * 0.0001  # Transaktionskosten
+                balance -= units * pip_value * 0.0001  # Transaktionskosten
                 trades.append({
-                    "entry_time": prev_time,
+                    "entry_time": current_time,
                     "exit_time": current_time,
                     "entry_price": entry_price,
                     "exit_price": current_close,
                     "profit": profit,
-                    "type": "LONG"
+                    "type": "LONG",
+                    "units": units,
+                    "pips": pips
                 })
-                logger.info(f"{symbol}-Position geschlossen bei {current_close} um {current_time}, Profit: {profit}")
+                logger.info(f"{symbol}-Position geschlossen bei {current_close} um {current_time}, Profit: {profit:.2f}, Pips: {pips:.2f}")
             elif position == "SHORT":
-                profit = (entry_price - current_close) * units * leverage
+                pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
+                price_diff = (entry_price - current_close)
+                pips = price_diff / 0.0001 if symbol != "USDJPY" else price_diff / 0.01
+                profit = pips * units * pip_value * leverage
                 balance += profit
-                balance -= units * current_close * 0.0001  # Transaktionskosten
+                balance -= units * pip_value * 0.0001  # Transaktionskosten
                 trades.append({
-                    "entry_time": prev_time,
+                    "entry_time": current_time,
                     "exit_time": current_time,
                     "entry_price": entry_price,
                     "exit_price": current_close,
                     "profit": profit,
-                    "type": "SHORT"
+                    "type": "SHORT",
+                    "units": units,
+                    "pips": pips
                 })
-                logger.info(f"{symbol}-Position geschlossen bei {current_close} um {current_time}, Profit: {profit}")
+                logger.info(f"{symbol}-Position geschlossen bei {current_close} um {current_time}, Profit: {profit:.2f}, Pips: {pips:.2f}")
             
             position = "NONE"
             entry_price = 0
             units = 0
             df_sim.at[current_time, "position"] = position
+    
+    # Speichere Debug-Daten in eine CSV-Datei
+    os.makedirs("results", exist_ok=True)
+    debug_df = pd.DataFrame(debug_data)
+    debug_df.to_csv(f"results/debug_log_{symbol}.csv", index=False)
+    logger.info(f"Debug-Daten für {symbol} gespeichert in results/debug_log_{symbol}.csv")
+    
+    # Speichere Trade-Details in eine CSV-Datei
+    trade_df = pd.DataFrame(trades)
+    trade_df["symbol"] = symbol
+    trade_df = trade_df[["symbol", "type", "entry_time", "exit_time", "entry_price", "exit_price", "units", "pips", "profit"]]
+    trade_df.to_csv(f"results/trades_{symbol}.csv", index=False)
+    logger.info(f"Trade-Details für {symbol} gespeichert in results/trades_{symbol}.csv")
     
     return df_sim, trades
 
@@ -149,7 +225,6 @@ def calculate_performance(df_sim, trades):
     total_profit = sum(trade["profit"] for trade in trades)
     num_trades = len(trades)
     winning_trades = sum(1 for trade in trades if trade["profit"] > 0)
-    losing_trades = sum(1 for trade in trades if trade["profit"] < 0)
     win_rate = winning_trades / num_trades if num_trades > 0 else 0
     
     gross_profit = sum(trade["profit"] for trade in trades if trade["profit"] > 0)

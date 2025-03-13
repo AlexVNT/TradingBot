@@ -1,0 +1,12 @@
+EURUSD:
+Profit: 24562.00000 | Profitfactor: 13.57 | Wins: 30 | Trades: 43 | Drawdown: -0.04688 | Sharp: 10.53
+
+GBPUSD:
+Profit: 18566.66667 | Profitfactor: 14.06 | Wins: 39 | Trades: 47 | Drawdown: -0.03882 | Sharp: 13.06
+
+USDJPY:
+Profit: 18885.73348 | Profitfactor: 11.21 | Wins: 31 | Trades: 42 | Drawdown: -0.05376 | Sharp: 8.75
+
+AUDUSD:
+Profit: 14052.57143 | Profitfactor: 10.90 | Wins: 30 | Trades: 39 | Drawdown: -0.04267 | Sharp: 9.35
+
