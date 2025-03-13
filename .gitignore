@@ -29,3 +29,5 @@ poetry.lock
 
 # 🔧 Docker & Deployment (falls genutzt)
 docker-compose.override.yml
+
+backup/
