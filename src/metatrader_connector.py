@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 import MetaTrader5 as mt5
 import pandas as pd
+from src.utils import logger
 
 # Lade die .env-Datei (ggf. passe den Pfad an)
 load_dotenv()
@@ -31,13 +32,16 @@ class MetaTraderConnector:
             raise Exception("Konnte Account-Info nicht abrufen.")
         return info._asdict()
     
-    def get_ohlcv(self, symbol: str, timeframe, limit: int = 500) -> pd.DataFrame:
-        rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, limit)
-        if rates is None:
-            raise Exception("Konnte OHLCV-Daten nicht abrufen.")
+    # In metatrader_connector.py
+    def get_ohlcv(self, symbol, timeframe, limit=1000, shift=0):
+        rates = mt5.copy_rates_from_pos(symbol, timeframe, shift, limit)
+        if rates is None or len(rates) == 0:
+            logger.error(f"Keine Daten für {symbol} im Zeitrahmen {timeframe}")
+            return None
         df = pd.DataFrame(rates)
         df['time'] = pd.to_datetime(df['time'], unit='s')
         df.set_index('time', inplace=True)
+        df = df[['open', 'high', 'low', 'close', 'tick_volume']]
         return df
 
     def execute_order(self, symbol: str, order_type: int, volume: float, price: float = 0):

@@ -1,53 +1,132 @@
 {% extends "layout.html" %}
 {% block content %}
-  <h1>Dashboard</h1>
-  <div class="row">
-    <div class="col-md-6">
-      <h3>Performance Metriken</h3>
-      <ul class="list-group">
-        {% for key, value in performance.items() %}
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            {{ key }}
-            <span class="badge bg-primary rounded-pill">{{ value }}</span>
-          </li>
-        {% endfor %}
-      </ul>
+  <div class="bg-gray-900/80 rounded-2xl shadow-2xl p-6 backdrop-blur-md border border-cyan-500/30">
+    <h1 class="text-4xl font-bold text-orange-400 mb-8 glow">Dashboard</h1>
+    <div class="flex flex-wrap gap-6 mb-8">
+      <div class="flex items-center gap-4">
+        <form id="update-form" method="post">
+          <select name="platform" class="bg-gray-800 text-cyan-200 border border-cyan-600 rounded-xl p-3 focus:ring-2 focus:ring-orange-400 transition-all duration-300 hover:shadow-lg" onchange="this.form.submit()">
+            {% for p in platforms %}
+              <option value="{{ p }}" {% if p == selected_platform %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+          </select>
+          <select name="symbol" class="bg-gray-800 text-cyan-200 border border-cyan-600 rounded-xl p-3 focus:ring-2 focus:ring-orange-400 transition-all duration-300 hover:shadow-lg" onchange="this.form.submit()">
+            {% for s in symbols %}
+              <option value="{{ s }}" {% if s == selected_symbol %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+      <div class="flex gap-4">
+        {% if bot_running %}
+          <form method="post" action="{{ url_for('stop_bot') }}" class="inline">
+            <button type="submit" class="bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform transform hover:scale-105 hover:shadow-orange-500/50">Bot Stoppen</button>
+          </form>
+        {% else %}
+          <form method="post" action="{{ url_for('start_bot') }}" class="inline">
+            <button type="submit" class="bg-green-700 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform transform hover:scale-105 hover:shadow-orange-500/50">Bot Starten</button>
+          </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('run_backtest_route') }}" class="inline">
+          <input type="hidden" name="platform" value="{{ selected_platform }}">
+          <input type="hidden" name="symbol" value="{{ selected_symbol }}">
+          <button type="submit" class="bg-blue-900 hover:bg-blue-800 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform transform hover:scale-105 hover:shadow-orange-500/50">Backtest Starten</button>
+        </form>
+        <form method="post" action="{{ url_for('run_tuning') }}" class="inline">
+          <button type="submit" class="bg-orange-700 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform transform hover:scale-105 hover:shadow-cyan-500/50">Tuning Starten</button>
+        </form>
+      </div>
     </div>
-    <div class="col-md-6">
-      <h3>Backtest Chart</h3>
-      <canvas id="chartCanvas"></canvas>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="bg-gray-800/80 rounded-2xl shadow-xl p-6 backdrop-blur-md border border-cyan-500/30 hover:shadow-cyan-500/20 transition-shadow duration-300">
+        <h3 class="text-2xl font-semibold text-orange-400 mb-6">Performance Metriken</h3>
+        <ul class="space-y-4">
+          {% for key, value in performance.items() %}
+            <li class="flex justify-between items-center p-4 bg-gray-700/50 rounded-xl shadow-md transition-all duration-300 hover:bg-gray-600/50">
+              <span class="text-cyan-200">{{ key }}</span>
+              <span class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg shadow-inner">{{ value }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+        <h3 class="text-2xl font-semibold text-orange-400 mt-8 mb-6">Live Daten</h3>
+        <div id="live-data" class="space-y-4">
+          <div class="flex justify-between items-center p-4 bg-gray-700/50 rounded-xl shadow-md transition-all duration-300 hover:bg-gray-600/50">
+            <span class="text-cyan-200">Kontostand</span>
+            <span id="balance" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-inner">0</span>
+          </div>
+          <div class="flex justify-between items-center p-4 bg-gray-700/50 rounded-xl shadow-md transition-all duration-300 hover:bg-gray-600/50">
+            <span class="text-cyan-200">Offene Positionen</span>
+            <span id="positions" class="bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-inner">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="bg-gray-800/80 rounded-2xl shadow-xl p-6 backdrop-blur-md border border-cyan-500/30 hover:shadow-cyan-500/20 transition-shadow duration-300">
+        <h3 class="text-2xl font-semibold text-orange-400 mb-6">Backtest Chart</h3>
+        <canvas id="chartCanvas" class="bg-gray-700/50 rounded-xl p-4 shadow-inner"></canvas>
+      </div>
     </div>
   </div>
 {% endblock %}
 
 {% block scripts %}
-<!-- Chart.js über CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  // Direktes Einfügen des JSON-Objekts, das durch den tojson-Filter erzeugt wird.
-  const chartData = {{ chart_data|tojson }};
-  console.log("chartData:", chartData);
-  
+  const chartData = {{ chart_data|tojson|safe }};
+  console.log("Chart Data:", chartData);
   const ctx = document.getElementById('chartCanvas').getContext('2d');
-  
   const myChart = new Chart(ctx, {
       type: 'line',
       data: {
           labels: chartData.labels,
           datasets: [{
-              label: 'Backtest Ergebnisse',
+              label: 'Profit',
               data: chartData.values,
-              borderColor: 'rgba(75, 192, 192, 1)',
-              tension: 0.1
+              borderColor: '#00FFFF',
+              backgroundColor: 'rgba(0, 255, 255, 0.2)',
+              tension: 0.2,
+              fill: true,
+              pointBackgroundColor: '#00FFFF',
+              pointBorderColor: '#00FFFF',
+              pointHoverBackgroundColor: '#F97316',
+              pointHoverBorderColor: '#F97316'
           }]
       },
       options: {
           responsive: true,
+          plugins: {
+              legend: {
+                  labels: { color: '#00FFFF' }
+              }
+          },
           scales: {
-              y: { beginAtZero: true }
+              y: {
+                  beginAtZero: true,
+                  title: { display: true, text: 'Profit', color: '#00FFFF' },
+                  grid: { color: 'rgba(0, 255, 255, 0.1)' },
+                  ticks: { color: '#00FFFF' }
+              },
+              x: {
+                  title: { display: true, text: 'Zeit', color: '#00FFFF' },
+                  grid: { color: 'rgba(0, 255, 255, 0.1)' },
+                  ticks: { color: '#00FFFF' }
+              }
           }
       }
   });
+
+  function updateLiveData() {
+      fetch('/api/live_data')
+          .then(response => response.json())
+          .then(data => {
+              document.getElementById('balance').innerText = data.balance.toFixed(2);
+              document.getElementById('positions').innerText = data.positions.length;
+              console.log('Live Data:', data);
+          })
+          .catch(error => {
+              console.error('Fehler beim Abrufen der Live-Daten:', error);
+          });
+  }
+  setInterval(updateLiveData, 5000);
+  updateLiveData();
 </script>
 {% endblock %}
-

@@ -1,104 +1,114 @@
-# src/backtesting_improved.py
 import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import talib
-from utils import logger
+from src.utils import logger
+from src.strategy import CompositeStrategy
+import logging
 
-def run_backtest(df, strategy, config, df_higher=None, symbol=None):
-    """
-    Führt einen Backtest für die gegebene Strategie und Daten durch.
-    
-    Args:
-        df (pd.DataFrame): Stundendaten (H1) mit OHLCV-Daten
-        strategy (CompositeStrategy): Die Handelsstrategie
-        config (dict): Konfiguration aus config.yaml
-        df_higher (pd.DataFrame): Daten im höheren Zeitrahmen (z. B. H4)
-        symbol (str): Handelssymbol (z. B. EURUSD)
-    
-    Returns:
-        df_sim (pd.DataFrame): Datenframe mit simulierten Ergebnissen
-        trades (list): Liste der Trades
-    """
-    # Initialisiere das Startkapital aus der config.yaml
-    initial_balance = config["risk_management"].get("initial_balance", 10000)  # Standard: 10.000 $
+logger.info("=== NEW VERSION LOADED: backtesting_improved.py with enforced unit limits v12 (2025-03-15) ===")
+
+def setup_detailed_logger(symbol):
+    detailed_logger = logging.getLogger(f"detailed_{symbol}")
+    detailed_logger.setLevel(logging.DEBUG)
+    os.makedirs("results", exist_ok=True)
+    handler = logging.FileHandler(f"results/debug_detailed_{symbol}.log", mode='w')
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    detailed_logger.addHandler(handler)
+    return detailed_logger
+
+def run_backtest(df, strategy, config, df_higher=None, symbol=None, platform=None):
+    initial_balance = config["risk_management"].get("initial_balance", 16000)
     balance = initial_balance
     equity = initial_balance
     position = "NONE"
-    prev_position = "NONE"  # Für Debug-Logik
+    prev_position = "NONE"
     entry_price = 0
-    units = 0  # Anzahl der gehandelten Lots
+    units = 0
     trades = []
     equity_curve = []
-    debug_data = []  # Liste für Debug-Informationen
+    debug_data = []
     
-    # Risikomanagement-Parameter aus der config.yaml
-    risk_pct = config["risk_management"].get("risk_pct", 0.01)  # 1 % Risiko pro Trade
-    atr_sl_multiplier = 1.0  # Nur für GBPUSD relevant
-    atr_tp_multiplier = config["strategy"].get("atr_tp_multiplier", 6.0)
+    if platform not in ["binance", "metatrader"]:
+        raise ValueError(f"Ungültige Plattform: {platform}. Erwartet: 'binance' oder 'metatrader'")
+    leverage = config["trading"][platform].get("leverage", 1)
     atr_period = config["risk_management"].get("atr_period", 14)
-    leverage = config["trading"]["metatrader"].get("leverage", 1)
-    fixed_sl_pips = 8 if symbol == "EURUSD" else 7 if symbol == "AUDUSD" else 12  # Letzte Feinjustierung für AUDUSD
-    fixed_risk_per_trade = 160  # Feste Risiko pro Trade
     
-    # Berechne ATR und füge es dem Datenframe hinzu
+    detailed_logger = setup_detailed_logger(symbol)
+    logger.info(f"Starting backtest for {platform}/{symbol} with leverage {leverage}")
+    detailed_logger.debug(f"Platform: {platform}, Symbol: {symbol}, Leverage: {leverage}")
+    
+    # ATR für SL/TP verwenden, kein fixed_sl_pips mehr
     df["atr"] = talib.ATR(df["high"], df["low"], df["close"], timeperiod=atr_period)
-    # Füllen von NaN-Werten mit dem ersten gültigen ATR-Wert
     df["atr"] = df["atr"].fillna(method="bfill").fillna(df["atr"].mean())
     
-    # Initialisiere den simulierten Datenframe
     df_sim = df.copy()
-    df_sim["balance"] = initial_balance
-    df_sim["equity"] = initial_balance
+    df_sim["balance"] = pd.Series(initial_balance, dtype=float)
+    df_sim["equity"] = pd.Series(initial_balance, dtype=float)
     df_sim["position"] = "NONE"
+    detailed_logger.debug(f"Dataframe initialized: {len(df_sim)} rows")
     
     for i in range(1, len(df_sim)):
         current_time = df_sim.index[i]
         current_close = df_sim["close"].iloc[i]
         atr = df_sim["atr"].iloc[i]
         
-        # Aktualisiere Equity für offene Positionen
+        detailed_logger.debug(f"Processing timestamp: {current_time}, Close: {current_close}, ATR: {atr}")
+        
+        if balance <= 0:
+            logger.error(f"{symbol}: Balance negativ ({balance}), Backtest abgebrochen.")
+            detailed_logger.error(f"Balance negativ: {balance}, stopping backtest")
+            break
+        
+        # Pip-Werte definieren
+        pip_size = current_close * 0.0001 if platform == "binance" else (0.0001 if symbol != "USDJPY" else 0.01)
+        pip_value = 0.1 if platform == "binance" else (10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close))
+        
         if position != "NONE":
-            pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
+            detailed_logger.debug(f"Position active - Pip Value: {pip_value}, Pip Size: {pip_size}, Units: {units}")
             if position == "LONG":
                 price_diff = (current_close - entry_price)
-                pips = price_diff / 0.0001 if symbol != "USDJPY" else price_diff / 0.01
+                pips = price_diff / pip_size
                 equity = balance + (pips * units * pip_value * leverage)
+                detailed_logger.debug(f"LONG - Price Diff: {price_diff}, Pips: {pips}, Equity: {equity}")
             elif position == "SHORT":
                 price_diff = (entry_price - current_close)
-                pips = price_diff / 0.0001 if symbol != "USDJPY" else price_diff / 0.01
+                pips = price_diff / pip_size
                 equity = balance + (pips * units * pip_value * leverage)
+                detailed_logger.debug(f"SHORT - Price Diff: {price_diff}, Pips: {pips}, Equity: {equity}")
         else:
             equity = balance
+            detailed_logger.debug(f"No position - Equity set to Balance: {equity}")
         
         df_sim.at[current_time, "balance"] = balance
         df_sim.at[current_time, "equity"] = equity
         
-        # Speichere Debug-Daten vor der Änderung der Position
         if prev_position != position:
-            debug_data.append({
+            debug_entry = {
                 "time": current_time,
                 "balance": balance,
                 "equity": equity,
                 "position": position,
                 "entry_price": entry_price if position != "NONE" else 0,
                 "exit_price": current_close if position == "NONE" and prev_position != "NONE" else 0,
-                "units": units if position != "NONE" or prev_position != "NONE" else 0,
+                "units": units,
                 "atr": atr,
                 "pip_value": pip_value if position != "NONE" or prev_position != "NONE" else 0,
-                "risk_per_unit_in_pips": risk_per_unit_in_pips if position != "NONE" else 0,
-                "highest_win": max([trade["profit"] for trade in trades if trade["profit"] > 0] + [0]) if trades else 0,
-                "highest_loss": min([trade["profit"] for trade in trades if trade["profit"] < 0] + [0]) if trades else 0,
+                "risk_per_trade": strategy.calculate_risk(),
                 "profit": trades[-1]["profit"] if trades and position == "NONE" else 0
-            })
+            }
+            debug_data.append(debug_entry)
+            detailed_logger.debug(f"Debug entry saved: {debug_entry}")
         
-        # Aktualisiere Position für den nächsten Vergleich
         prev_position = position
         df_sim.at[current_time, "position"] = position
         equity_curve.append(equity)
         
-        # Generiere Handelssignal
+        strategy.balance = max(balance, 0)
+        detailed_logger.debug(f"Before signal - Balance: {balance}, Position: {position}")
         signal = strategy.generate_signal(
             df_sim.iloc[:i+1],
             df_higher[df_higher.index <= current_time],
@@ -106,62 +116,43 @@ def run_backtest(df, strategy, config, df_higher=None, symbol=None):
             symbol,
             entry_price
         )
+        detailed_logger.debug(f"Signal generated: {signal}")
         
-        # Handle Signals
-        if signal == "BUY" and position == "NONE":
-            # Fester Stop-Loss für alle Paare
-            if symbol == "USDJPY":
-                stop_loss = current_close - (fixed_sl_pips * 0.01)
-                risk_per_unit = fixed_sl_pips * 0.01
-                risk_per_unit_in_pips = fixed_sl_pips
-            else:
-                stop_loss = current_close - (fixed_sl_pips * 0.0001)
-                risk_per_unit = fixed_sl_pips * 0.0001
-                risk_per_unit_in_pips = fixed_sl_pips
+        if signal in ["BUY", "SELL"] and position == "NONE":
+            # ATR-basierte SL-Berechnung
+            sl_pips = strategy.atr_sl_multiplier * atr / pip_size
+            risk_per_trade = strategy.calculate_risk()
+            calculated_units = risk_per_trade / (sl_pips * pip_value)
+            detailed_logger.debug(f"{'BUY' if signal == 'BUY' else 'SELL'} - Pre-calc: risk_per_trade={risk_per_trade}, sl_pips={sl_pips}, pip_value={pip_value}, calculated_units={calculated_units}")
             
-            risk_per_trade = fixed_risk_per_trade  # Feste Risiko pro Trade
-            pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
-            units = (risk_per_trade / (risk_per_unit_in_pips * pip_value)) if risk_per_unit > 0 and pip_value > 0 else 0
-            units = min(max(units, 0.01), 100.0)
+            if platform == "binance":
+                units = min(max(calculated_units, 0.0001), 5.0)  # Erhöhtes Maximum auf 5.0
+                if calculated_units > 5.0:
+                    logger.warning(f"{symbol} {'BUY' if signal == 'BUY' else 'SELL'}: Calculated units {calculated_units} exceeded 5.0, capped at {units}")
+                    detailed_logger.warning(f"{'BUY' if signal == 'BUY' else 'SELL'} - Calculated units {calculated_units} exceeded 5.0, capped at {units}")
+            else:  # MetaTrader
+                units = min(max(calculated_units, 0.01), 5.0)  # Maximum 5.0 statt 100.0 für realistische Tests
+                if calculated_units > 5.0:
+                    logger.warning(f"{symbol} {'BUY' if signal == 'BUY' else 'SELL'}: Calculated units {calculated_units} exceeded 5.0, capped at {units}")
+                    detailed_logger.warning(f"{'BUY' if signal == 'BUY' else 'SELL'} - Calculated units {calculated_units} exceeded 5.0, capped at {units}")
             
-            position = "LONG"
+            detailed_logger.debug(f"{'BUY' if signal == 'BUY' else 'SELL'} - Post-calc: final_units={units}")
+            
+            position = "LONG" if signal == "BUY" else "SHORT"
             entry_price = current_close
-            balance -= units * pip_value * 0.0001  # Transaktionskosten (0.01 %)
+            # Kein Balance-Abzug beim Öffnen
             df_sim.at[current_time, "position"] = position
-            logger.info(f"{symbol}-Position eröffnet bei {entry_price} um {current_time}, Units: {units:.4f}, Pip Value: {pip_value:.4f}, Risk per Unit (Pips): {risk_per_unit_in_pips:.2f}, ATR: {atr:.6f}")
-        
-        elif signal == "SELL" and position == "NONE":
-            # Fester Stop-Loss für alle Paare
-            if symbol == "USDJPY":
-                stop_loss = current_close + (fixed_sl_pips * 0.01)
-                risk_per_unit = fixed_sl_pips * 0.01
-                risk_per_unit_in_pips = fixed_sl_pips
-            else:
-                stop_loss = current_close + (fixed_sl_pips * 0.0001)
-                risk_per_unit = fixed_sl_pips * 0.0001
-                risk_per_unit_in_pips = fixed_sl_pips
-            
-            risk_per_trade = fixed_risk_per_trade  # Feste Risiko pro Trade
-            pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
-            units = (risk_per_trade / (risk_per_unit_in_pips * pip_value)) if risk_per_unit > 0 and pip_value > 0 else 0
-            units = min(max(units, 0.01), 100.0)
-            
-            position = "SHORT"
-            entry_price = current_close
-            balance -= units * pip_value * 0.0001  # Transaktionskosten
-            df_sim.at[current_time, "position"] = position
-            logger.info(f"{symbol}-Position eröffnet bei {entry_price} um {current_time}, Units: {units:.4f}, Pip Value: {pip_value:.4f}, Risk per Unit (Pips): {risk_per_unit_in_pips:.2f}, ATR: {atr:.6f}")
+            logger.info(f"{symbol}-{'LONG' if signal == 'BUY' else 'SHORT'} eröffnet bei {entry_price}, Units: {units:.4f}, Risk: {risk_per_trade:.2f}")
+            detailed_logger.info(f"{'LONG' if signal == 'BUY' else 'SHORT'} opened - Entry Price: {entry_price}, Units: {units}, Balance after: {balance}")
         
         elif (signal == "CLOSE_LONG" and position == "LONG") or (signal == "CLOSE_SHORT" and position == "SHORT"):
             if position == "LONG":
-                pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
                 price_diff = (current_close - entry_price)
-                pips = price_diff / 0.0001 if symbol != "USDJPY" else price_diff / 0.01
+                pips = price_diff / pip_size
                 profit = pips * units * pip_value * leverage
-                balance += profit
-                balance -= units * pip_value * 0.0001  # Transaktionskosten
+                balance += profit  # Balance nur hier aktualisieren
                 trades.append({
-                    "entry_time": current_time,
+                    "entry_time": trades[-1]["entry_time"] if trades else current_time,
                     "exit_time": current_time,
                     "entry_price": entry_price,
                     "exit_price": current_close,
@@ -170,16 +161,15 @@ def run_backtest(df, strategy, config, df_higher=None, symbol=None):
                     "units": units,
                     "pips": pips
                 })
-                logger.info(f"{symbol}-Position geschlossen bei {current_close} um {current_time}, Profit: {profit:.2f}, Pips: {pips:.2f}")
+                logger.info(f"{symbol}-LONG geschlossen bei {current_close}, Profit: {profit:.2f}")
+                detailed_logger.info(f"LONG closed - Exit Price: {current_close}, Profit: {profit}, Units: {units}, Balance after: {balance}")
             elif position == "SHORT":
-                pip_value = 10 if symbol.endswith("USD") and symbol != "USDJPY" else (1000 / current_close) if symbol == "USDJPY" else 10
                 price_diff = (entry_price - current_close)
-                pips = price_diff / 0.0001 if symbol != "USDJPY" else price_diff / 0.01
+                pips = price_diff / pip_size
                 profit = pips * units * pip_value * leverage
-                balance += profit
-                balance -= units * pip_value * 0.0001  # Transaktionskosten
+                balance += profit  # Balance nur hier aktualisieren
                 trades.append({
-                    "entry_time": current_time,
+                    "entry_time": trades[-1]["entry_time"] if trades else current_time,
                     "exit_time": current_time,
                     "entry_price": entry_price,
                     "exit_price": current_close,
@@ -188,20 +178,19 @@ def run_backtest(df, strategy, config, df_higher=None, symbol=None):
                     "units": units,
                     "pips": pips
                 })
-                logger.info(f"{symbol}-Position geschlossen bei {current_close} um {current_time}, Profit: {profit:.2f}, Pips: {pips:.2f}")
+                logger.info(f"{symbol}-SHORT geschlossen bei {current_close}, Profit: {profit:.2f}")
+                detailed_logger.info(f"SHORT closed - Exit Price: {current_close}, Profit: {profit}, Units: {units}, Balance after: {balance}")
             
             position = "NONE"
             entry_price = 0
             units = 0
             df_sim.at[current_time, "position"] = position
     
-    # Speichere Debug-Daten in eine CSV-Datei
     os.makedirs("results", exist_ok=True)
     debug_df = pd.DataFrame(debug_data)
     debug_df.to_csv(f"results/debug_log_{symbol}.csv", index=False)
     logger.info(f"Debug-Daten für {symbol} gespeichert in results/debug_log_{symbol}.csv")
     
-    # Speichere Trade-Details in eine CSV-Datei
     trade_df = pd.DataFrame(trades)
     trade_df["symbol"] = symbol
     trade_df = trade_df[["symbol", "type", "entry_time", "exit_time", "entry_price", "exit_price", "units", "pips", "profit"]]
@@ -210,8 +199,9 @@ def run_backtest(df, strategy, config, df_higher=None, symbol=None):
     
     return df_sim, trades
 
+# Rest des Codes (calculate_performance, visualize_backtest) bleibt unverändert
+
 def calculate_performance(df_sim, trades):
-    """Berechnet die Performance-Metriken des Backtests."""
     if not trades:
         return {
             "total_profit": 0,
@@ -241,7 +231,7 @@ def calculate_performance(df_sim, trades):
         max_drawdown = max(max_drawdown, drawdown)
     
     returns = df_sim["equity"].pct_change().dropna()
-    sharpe = (returns.mean() / returns.std()) * np.sqrt(252 * 24) if returns.std() > 0 else 0  # Annualisiert (252 Handelstage, 24 Stunden)
+    sharpe = (returns.mean() / returns.std()) * np.sqrt(252 * 24) if returns.std() > 0 else 0
     
     return {
         "total_profit": total_profit,
@@ -253,7 +243,6 @@ def calculate_performance(df_sim, trades):
     }
 
 def visualize_backtest(df_sim, trades, title="Backtest"):
-    """Visualisiert die Ergebnisse des Backtests."""
     plt.figure(figsize=(14, 7))
     plt.plot(df_sim.index, df_sim["close"], label="Schlusskurs", color="blue")
     
@@ -278,5 +267,8 @@ def visualize_backtest(df_sim, trades, title="Backtest"):
     plt.grid()
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(f"results/{title.replace(':', '_')}.png")
+    
+    os.makedirs("results", exist_ok=True)
+    safe_title = title.replace(':', '_').replace('/', '_')
+    plt.savefig(f"results/{safe_title}.png")
     plt.close()

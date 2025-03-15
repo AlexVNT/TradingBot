@@ -1,12 +1,21 @@
-EURUSD:
-Profit: 24562.00000 | Profitfactor: 13.57 | Wins: 30 | Trades: 43 | Drawdown: -0.04688 | Sharp: 10.53
+binance/BTCUSDT:
+Profit: 7543.03476 | Profitfactor: 2.40 | Wins: 177 | Trades: 333 | Drawdown: 0.00000 | Sharpe: 3.10
 
-GBPUSD:
-Profit: 18566.66667 | Profitfactor: 14.06 | Wins: 39 | Trades: 47 | Drawdown: -0.03882 | Sharp: 13.06
+binance/ETHUSDT:
+Profit: -647.30668 | Profitfactor: 0.93 | Wins: 173 | Trades: 388 | Drawdown: 0.00000 | Sharpe: -0.11
 
-USDJPY:
-Profit: 18885.73348 | Profitfactor: 11.21 | Wins: 31 | Trades: 42 | Drawdown: -0.05376 | Sharp: 8.75
+binance/BNBUSDT:
+Profit: -11866.96056 | Profitfactor: 0.34 | Wins: 127 | Trades: 380 | Drawdown: 0.00000 | Sharpe: -2.44
 
-AUDUSD:
-Profit: 14052.57143 | Profitfactor: 10.90 | Wins: 30 | Trades: 39 | Drawdown: -0.04267 | Sharp: 9.35
+metatrader/EURUSD:
+Profit: 19419.96165 | Profitfactor: 7.18 | Wins: 30 | Trades: 50 | Drawdown: 0.00000 | Sharpe: 9.89
+
+metatrader/GBPUSD:
+Profit: 20383.38830 | Profitfactor: 8.80 | Wins: 38 | Trades: 51 | Drawdown: 0.00000 | Sharpe: 12.80
+
+metatrader/USDJPY:
+Profit: 12729.18617 | Profitfactor: 7.02 | Wins: 31 | Trades: 46 | Drawdown: 0.00000 | Sharpe: 8.48
+
+metatrader/AUDUSD:
+Profit: 15125.39754 | Profitfactor: 11.86 | Wins: 29 | Trades: 40 | Drawdown: 0.00000 | Sharpe: 10.30
 

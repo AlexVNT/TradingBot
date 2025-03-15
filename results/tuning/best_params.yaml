@@ -1,0 +1,23 @@
+binance:
+  BTCUSDT:
+    atr_sl_multiplier: 1.188873337948801
+    atr_tp_multiplier: 5.334834444556088
+  ETHUSDT:
+    atr_sl_multiplier: 2.0
+    atr_tp_multiplier: 4.0
+  BNBUSDT:
+    atr_sl_multiplier: 2.0
+    atr_tp_multiplier: 8.0
+metatrader:
+  EURUSD:
+    atr_sl_multiplier: 0.5
+    atr_tp_multiplier: 4.0
+  GBPUSD:
+    atr_sl_multiplier: 0.5
+    atr_tp_multiplier: 4.0
+  USDJPY:
+    atr_sl_multiplier: 0.5
+    atr_tp_multiplier: 4.0
+  AUDUSD:
+    atr_sl_multiplier: 0.5
+    atr_tp_multiplier: 4.0

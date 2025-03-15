@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="bg-gray-900/80 rounded-2xl shadow-2xl p-6 backdrop-blur-md border border-cyan-500/30">
+    <h1 class="text-4xl font-bold text-orange-400 mb-8 glow">Bot Status</h1>
+    <div class="bg-gray-800/50 rounded-xl p-6 shadow-md">
+      <h2 class="text-2xl text-orange-400 mb-4">Aktueller Status</h2>
+      <p class="text-cyan-200">Plattform: {{ selected_platform }}</p>
+      <p class="text-cyan-200">Symbol: {{ selected_symbol }}</p>
+      <p class="text-cyan-200">Bot läuft: {% if bot_running %}Ja{% else %}Nein{% endif %}</p>
+      {% if bot_running %}
+        <button onclick="stopBot()" class="bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg mt-4 transition-transform transform hover:scale-105">Bot Stoppen</button>
+      {% else %}
+        <button onclick="startBot()" class="bg-green-700 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg mt-4 transition-transform transform hover:scale-105">Bot Starten</button>
+      {% endif %}
+    </div>
+  </div>
+  <script>
+    function startBot() {
+      fetch('/start_bot', { method: 'POST' }).then(() => location.reload());
+    }
+    function stopBot() {
+      fetch('/stop_bot', { method: 'POST' }).then(() => location.reload());
+    }
+  </script>
+{% endblock %}

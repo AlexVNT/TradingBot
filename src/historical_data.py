@@ -2,7 +2,7 @@ import time
 import os
 import yaml
 import pandas as pd
-from binance_connector import BinanceConnector
+from src.binance_connector import BinanceConnector
 
 def download_historical_data(symbol: str, interval: str, start_str: str, limit: int = 500):
     """

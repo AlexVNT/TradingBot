@@ -1,13 +1,31 @@
-<!DOCTYPE html>
-
 {% extends "layout.html" %}
 {% block content %}
-  <h1>Konfiguration</h1>
-  <form method="POST">
-    <div class="mb-3">
-      <label for="configContent" class="form-label">Config Datei Inhalt (YAML):</label>
-      <textarea class="form-control" id="configContent" name="config_content" rows="15">{{ config_content }}</textarea>
+  <div class="bg-gray-900/80 rounded-2xl shadow-2xl p-6 backdrop-blur-md border border-cyan-500/30">
+    <h1 class="text-4xl font-bold text-orange-400 mb-8 glow">Konfiguration</h1>
+    <form method="post" class="space-y-6">
+      <textarea name="config_content" class="w-full h-64 bg-gray-800 text-cyan-200 border border-cyan-600 rounded-xl p-4 focus:ring-2 focus:ring-orange-400 transition-all duration-300" placeholder="YAML-Konfiguration hier einfügen">{{ config_content }}</textarea>
+      <button type="submit" class="bg-orange-700 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-transform transform hover:scale-105 hover:shadow-cyan-500/50">Konfiguration speichern</button>
+    </form>
+    <div class="mt-6 space-y-4">
+      {% for section, values in config.items() %}
+        <div class="bg-gray-800/50 rounded-xl p-4 shadow-md">
+          <h2 class="text-xl text-orange-400 mb-2">{{ section }}</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for key, value in values.items() %}
+              <div class="flex items-center space-x-2">
+                <label class="text-cyan-200">{{ key }}</label>
+                {% if value is string or value is number %}
+                  <input type="text" value="{{ value }}" class="bg-gray-700 text-cyan-200 border border-cyan-600 rounded p-2 w-32 focus:ring-2 focus:ring-orange-400" readonly>
+                {% elif value is boolean %}
+                  <input type="checkbox" {% if value %}checked{% endif %} disabled class="h-5 w-5 text-orange-400 border-gray-600 rounded focus:ring-orange-400">
+                {% else %}
+                  <span class="text-gray-400">{{ value }}</span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
     </div>
-    <button type="submit" class="btn btn-primary">Speichern</button>
-  </form>
+  </div>
 {% endblock %}

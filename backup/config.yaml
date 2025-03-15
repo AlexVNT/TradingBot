@@ -19,7 +19,8 @@ strategy:
   atr_sl_multiplier: 1.5
 
 risk_management:
-  risk_pct: 0.017
+  initial_balance: 16000  # Budget des Demo-Accounts
+  risk_pct: 0.01  # 1 % Risiko pro Trade
   k_atr: 1.98
   m_atr: 2.73
   atr_period: 14
@@ -37,7 +38,7 @@ trading:
     higher_timeframe: "1d"
     use_testnet: true
     trade_pair: "BTCUSDT"
-    leverage: 10
+    leverage: 1
     volume_column: "volume"
   metatrader:
     symbol: "EURUSD"

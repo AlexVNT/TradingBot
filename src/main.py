@@ -1,12 +1,12 @@
+#src/main.py
 import os
 import time
 from dotenv import load_dotenv
 import yaml
-from bot import TradingBot
-from utils import logger
+from src.bot import TradingBot
+from src.utils import logger
 
 load_dotenv()
-
 def load_config(config_path="config/config.yaml"):
     if not os.path.exists(config_path):
         print(f"⚠ Warnung: Konfigurationsdatei {config_path} nicht gefunden!")
@@ -26,19 +26,13 @@ if not config:
 def main():
     bot = TradingBot(config)
     logger.info("🚀 Starte TradingBot...")
-    
-    # Bot läuft 24 Stunden (oder passe run_duration an)
-    start_time = time.time()
-    run_duration = 24 * 60 * 60  # 24 Stunden in Sekunden
-    end_time = start_time + run_duration
-    
-    while time.time() < end_time:
+    while True:
         try:
             bot.start()
+            time.sleep(300)  # 5 Minuten
         except Exception as e:
             logger.error(f"❌ Fehler beim Ausführen des Bots: {e}")
-        # Warte 5 Minuten zwischen den Durchläufen
-        time.sleep(300)
+            time.sleep(60)  # Kurze Pause nach Fehler
 
 if __name__ == "__main__":
     main()

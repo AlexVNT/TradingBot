@@ -1,135 +1,102 @@
-# src/tuning.py
 import os
 import yaml
 import pandas as pd
-import datetime
-from backtesting_improved import run_backtest, calculate_performance, visualize_backtest
-from strategy import CompositeStrategy
-from utils import logger
-from multi_backtesting import load_data
-from bayes_opt import BayesianOptimization
+import numpy as np
+from src.backtesting_improved import run_backtest, calculate_performance
+from src.strategy import CompositeStrategy
+from src.utils import logger
+from src.multi_backtesting import load_data
+import logging
+from skopt import gp_minimize
+from skopt.space import Real
 
-def load_config():
-    with open("config/config.yaml", "r") as file:
+def load_config(config_path="config/config.yaml"):
+    with open(config_path, "r") as file:
         return yaml.safe_load(file)
 
-def evaluate_strategy(rsi_period, rsi_overbought, rsi_oversold, atr_tp, atr_sl, lookback, **kwargs):
-    symbol = kwargs.get('symbol', "EURUSD")
-    platform = kwargs.get('platform', "metatrader")
-    config = kwargs.get('config', load_config())
-    df_hourly, df_higher = kwargs.get('data', load_data(platform, symbol, config))
-
-    if df_hourly is None or df_higher is None:
-        return -float('inf')
-
-    # Rundung der Parameter auf ganzzahlige oder sinnvolle Werte
-    rsi_period = int(round(rsi_period))
-    rsi_overbought = int(round(rsi_overbought))
-    rsi_oversold = int(round(rsi_oversold))
-    atr_tp = round(atr_tp, 1)
-    atr_sl = round(atr_sl, 1)
-    lookback = int(round(lookback))
-
-    # Sicherstellen, dass die Werte im gültigen Bereich liegen
-    rsi_period = max(2, min(15, rsi_period))
-    rsi_overbought = max(50, min(90, rsi_overbought))
-    rsi_oversold = max(10, min(40, rsi_oversold))
-    atr_tp = max(2.0, min(8.0, atr_tp))
-    atr_sl = max(0.5, min(3.5, atr_sl))
-    lookback = max(3, min(10, lookback))
-
-    # Temporäre Config anpassen
+def objective(params, config, platform, symbol, df_hourly, df_higher):
+    atr_sl, atr_tp = params
     temp_config = config.copy()
-    temp_config["strategy"] = temp_config.get("strategy", {})
-    temp_config["strategy"]["rsi_period"] = rsi_period
-    temp_config["strategy"]["rsi_overbought"] = rsi_overbought
-    temp_config["strategy"]["rsi_oversold"] = rsi_oversold
-    temp_config["strategy"]["atr_tp_multiplier"] = atr_tp
-    temp_config["strategy"]["atr_sl_multiplier"] = atr_sl
-    temp_config["strategy"]["lookback"] = lookback
-
-    strategy = CompositeStrategy(temp_config)
-    df_sim, trades = run_backtest(df_hourly, strategy, temp_config, df_higher=df_higher, symbol=symbol)
+    temp_config["strategy"]["atr_sl_multiplier"] = float(atr_sl)
+    temp_config["strategy"]["atr_tp_multiplier"] = float(atr_tp)
+    temp_config["trading"][platform]["symbols"][symbol]["atr_sl_multiplier"] = float(atr_sl)
+    temp_config["trading"][platform]["symbols"][symbol]["atr_tp_multiplier"] = float(atr_tp)
+    strategy = CompositeStrategy(temp_config, symbol=symbol)
+    df_sim, trades = run_backtest(df_hourly, strategy, temp_config, df_higher=df_higher, symbol=symbol, platform=platform)
     perf = calculate_performance(df_sim, trades)
+    profit = perf["total_profit"]
+    logger.info(f"{platform}/{symbol}: Teste SL: {atr_sl:.2f}, TP: {atr_tp:.2f}, Profit: {profit:.2f}")
+    return -profit  # Negativ, da gp_minimize minimiert
 
-    # Zielmetrik: Kombination aus Profit, Win Rate und Anzahl der Trades
-    min_trades = 30
-    trade_penalty = min(0, (len(trades) - min_trades) * 0.02)
-    win_rate_bonus = perf["win_rate"] * 0.2
-    score = perf["total_profit"] + trade_penalty + win_rate_bonus
-
-    logger.info(f"Getestet: RSI {rsi_period}/{rsi_overbought}/{rsi_oversold}, TP {atr_tp}x, SL {atr_sl}x, Lookback {lookback} – Profit: {perf['total_profit']:.5f}, Trades: {len(trades)}, Win Rate: {perf['win_rate']:.2f}, Score: {score:.5f}")
-    return score if perf["total_profit"] is not None else -float('inf')
-
-def tune_strategy():
-    config = load_config()
-    platform = "metatrader" if config["platforms"].get("metatrader", False) else "binance"
-    symbol = config['trading']['metatrader'].get("symbol", "EURUSD") if platform == "metatrader" else config['trading'].get("trade_pair", "BTCUSDT")
-
-    df_hourly, df_higher = load_data(platform, symbol, config)
-    if df_hourly is None or df_higher is None:
-        logger.error(f"Datenabruf für {symbol} fehlgeschlagen.")
-        return None, None
-
-    pbounds = {
-        'rsi_period': (2, 15),
-        'rsi_overbought': (50, 90),
-        'rsi_oversold': (10, 40),
-        'atr_tp': (2.0, 8.0),
-        'atr_sl': (0.5, 3.5),
-        'lookback': (3, 10)
-    }
-
-    optimizer = BayesianOptimization(
-        f=lambda rsi_period, rsi_overbought, rsi_oversold, atr_tp, atr_sl, lookback: evaluate_strategy(
-            rsi_period, rsi_overbought, rsi_oversold, atr_tp, atr_sl, lookback,
-            config=config, symbol=symbol, platform=platform, data=(df_hourly, df_higher)
-        ),
-        pbounds=pbounds,
+def bayesian_optimization(config, platform, symbol, atr_sl_range, atr_tp_range, df_hourly, df_higher):
+    # Logging auf INFO setzen
+    original_level = logger.getEffectiveLevel()
+    logger.setLevel(logging.INFO)
+    detailed_logger = logging.getLogger(f"detailed_{symbol}")
+    detailed_original_level = detailed_logger.getEffectiveLevel()
+    detailed_logger.setLevel(logging.INFO)
+    
+    # Suchraum definieren
+    space = [
+        Real(atr_sl_range[0], atr_sl_range[1], name="atr_sl_multiplier"),
+        Real(atr_tp_range[0], atr_tp_range[1], name="atr_tp_multiplier")
+    ]
+    
+    # Bayesian Optimization durchführen
+    result = gp_minimize(
+        lambda params: objective(params, config, platform, symbol, df_hourly, df_higher),
+        space,
+        n_calls=20,  # Anzahl der Iterationen
         random_state=42,
-        allow_duplicate_points=True
+        verbose=False
     )
+    
+    # Beste Parameter und Ergebnis
+    best_params = {"atr_sl_multiplier": float(result.x[0]), "atr_tp_multiplier": float(result.x[1])}
+    temp_config = config.copy()
+    temp_config["strategy"]["atr_sl_multiplier"] = best_params["atr_sl_multiplier"]
+    temp_config["strategy"]["atr_tp_multiplier"] = best_params["atr_tp_multiplier"]
+    temp_config["trading"][platform]["symbols"][symbol]["atr_sl_multiplier"] = best_params["atr_sl_multiplier"]
+    temp_config["trading"][platform]["symbols"][symbol]["atr_tp_multiplier"] = best_params["atr_tp_multiplier"]
+    strategy = CompositeStrategy(temp_config, symbol=symbol)
+    df_sim, trades = run_backtest(df_hourly, strategy, temp_config, df_higher=df_higher, symbol=symbol, platform=platform)
+    best_result = calculate_performance(df_sim, trades)
+    
+    # Logging-Level zurücksetzen
+    logger.setLevel(original_level)
+    detailed_logger.setLevel(detailed_original_level)
+    
+    return best_params, best_result
 
-    logger.info("Starte Bayesian Optimization für die Parameter...")
-    optimizer.maximize(
-        init_points=5,
-        n_iter=40
-    )
-
-    best_params = optimizer.max['params']
-    best_params['rsi_period'] = int(round(best_params['rsi_period']))
-    best_params['rsi_overbought'] = int(round(best_params['rsi_overbought']))
-    best_params['rsi_oversold'] = int(round(best_params['rsi_oversold']))
-    best_params['lookback'] = int(round(best_params['lookback']))
-    best_value = optimizer.max['target']
-    logger.info(f"Beste Parameter: {best_params} mit Score: {best_value:.5f}")
-
-    # Speichere die besten Parameter in einer separaten Datei
-    os.makedirs("results", exist_ok=True)
-    with open("results/best_parameters.yaml", "w") as f:
-        yaml.dump(best_params, f)
-    logger.info("Beste Parameter gespeichert in 'results/best_parameters.yaml'")
-
-    results = pd.DataFrame(optimizer.res)
-    os.makedirs("results", exist_ok=True)
-    results.to_csv("results/bayesian_tuning_results.csv", index=False)
-
-    # Führe den Backtest mit den besten Parametern aus und zeige Visualisierung
-    best_config = config.copy()
-    best_config["strategy"]["rsi_period"] = best_params['rsi_period']
-    best_config["strategy"]["rsi_overbought"] = best_params['rsi_overbought']
-    best_config["strategy"]["rsi_oversold"] = best_params['rsi_oversold']
-    best_config["strategy"]["atr_tp_multiplier"] = best_params['atr_tp']
-    best_config["strategy"]["atr_sl_multiplier"] = best_params['atr_sl']
-    best_config["strategy"]["lookback"] = best_params['lookback']
-
-    best_strategy = CompositeStrategy(best_config)
-    best_df_sim, best_trades = run_backtest(df_hourly, best_strategy, best_config, df_higher=df_higher, symbol=symbol)
-    best_perf = calculate_performance(best_df_sim, best_trades)
-    logger.info(f"Endgültige Performance mit besten Parametern: {best_perf}")
-    visualize_backtest(best_df_sim, best_trades, title=f"Backtest: {symbol} (Beste Parameter)")
-
-    return best_params, best_value
+def tune_all_symbols(config):
+    atr_sl_range = config["tuning"]["atr_sl_multiplier_range"]
+    atr_tp_range = config["tuning"]["atr_tp_multiplier_range"]
+    output_path = config["tuning"]["output_path"]
+    
+    best_params_dict = {"binance": {}, "metatrader": {}}
+    platforms = []
+    if config["platforms"]["binance"]:
+        platforms.append("binance")
+    if config["platforms"]["metatrader"]:
+        platforms.append("metatrader")
+    
+    for platform in platforms:
+        symbols = config["trading"][platform]["symbols"].keys()
+        for symbol in symbols:
+            logger.info(f"Optimiere {platform}/{symbol}...")
+            df_hourly, df_higher = load_data(platform, symbol, config)
+            if df_hourly is None or df_higher is None:
+                logger.error(f"Daten für {platform}/{symbol} fehlen, überspringe.")
+                continue
+            best_params, result = bayesian_optimization(config, platform, symbol, atr_sl_range, atr_tp_range, df_hourly, df_higher)
+            best_params_dict[platform][symbol] = best_params
+            logger.info(f"{platform}/{symbol}: Beste Parameter: {best_params}, Profit: {result['total_profit']:.2f}")
+    
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as file:
+        yaml.dump(best_params_dict, file, default_flow_style=False, sort_keys=False)
+    logger.info(f"Ergebnisse gespeichert in {output_path}")
 
 if __name__ == "__main__":
-    best_params, best_value = tune_strategy()
+    config = load_config()
+    tune_all_symbols(config)

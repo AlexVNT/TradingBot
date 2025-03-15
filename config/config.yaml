@@ -1,5 +1,5 @@
 platforms:
-  binance: false
+  binance: true
   metatrader: true
 
 strategy:
@@ -19,10 +19,9 @@ strategy:
   atr_sl_multiplier: 1.5
 
 risk_management:
-  initial_balance: 16000  # Budget des Demo-Accounts
-  risk_pct: 0.01  # 1 % Risiko pro Trade
-  k_atr: 1.98
-  m_atr: 2.73
+  initial_balance: 16000
+  base_risk: 0.01
+  dynamic_risk_factor: 0.001
   atr_period: 14
   cooldown_bars: 4
   short_tp_multiplier: 1.98
@@ -31,18 +30,40 @@ trading:
   max_open_positions: 3
   binance:
     symbols:
-      - "BTCUSDT"
-      - "ETHUSDT"
-      - "BNBUSDT"
+      BTCUSDT:
+        atr_sl_multiplier: 1.2
+        atr_tp_multiplier: 6.5
+      ETHUSDT:
+        atr_sl_multiplier: 2.5
+        atr_tp_multiplier: 6.0
+      BNBUSDT:
+        atr_sl_multiplier: 2.5
+        atr_tp_multiplier: 8.0
     timeframe: "1h"
-    higher_timeframe: "1d"
+    higher_timeframe: "4h"
     use_testnet: true
-    trade_pair: "BTCUSDT"
     leverage: 1
     volume_column: "volume"
   metatrader:
-    symbol: "EURUSD"
+    symbols:
+      EURUSD:
+        atr_sl_multiplier: 0.7
+        atr_tp_multiplier: 4.0
+      GBPUSD:
+        atr_sl_multiplier: 0.7
+        atr_tp_multiplier: 4.0
+      USDJPY:
+        atr_sl_multiplier: 0.7
+        atr_tp_multiplier: 4.0
+      AUDUSD:
+        atr_sl_multiplier: 0.7
+        atr_tp_multiplier: 4.0
     timeframe: "H1"
     higher_timeframe: "H4"
     leverage: 1
     volume_column: "tick_volume"
+
+tuning:
+  atr_sl_multiplier_range: [0.5, 2.0, 0.1]
+  atr_tp_multiplier_range: [4.0, 8.0, 0.5]
+  output_path: "results/tuning/best_params.yaml"

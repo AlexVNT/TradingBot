@@ -1,8 +1,8 @@
-# multi_trading.py
+# src/multi_trading.py
 import time
 import yaml
-from bot import TradingBot
-from utils import logger
+from src.bot import TradingBot
+from src.utils import logger
 
 def main():
     with open("config/config.yaml", "r") as file:
